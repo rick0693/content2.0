@@ -1,4 +1,4 @@
 requests
-beautifulsoup
+beautifulsoup4==4.10.0
 pandas
 openpyxl
