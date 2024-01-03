@@ -223,7 +223,7 @@ def pagina1():
                 if transportadoras_selecionadas[i]:
                     cursor.execute(
                         f'SELECT Numero_Nota, Status FROM consultas WHERE '
-                        f'(Status NOT IN ("MERCADORIA ENTREGUE", "ENTREGA REALIZADA COM RESSALVA") OR Status IS NULL) AND '
+                        f'(Status NOT IN ("M", "ENTREGA REALIZADA COM RESSALVA") OR Status IS NULL) AND '
                         f'Transportadora = "{transportadora}"'
                     )
                     dados_notas = cursor.fetchall()
