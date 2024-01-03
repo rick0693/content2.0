@@ -157,10 +157,7 @@ def pagina1():
                             self.atualizar_banco_dados(numero_nota, situacao_text, data_situacao, previsao_entrega,
                                                     url_completa, Data_Status)
 
-                            # Se a mercadoria foi entregue, interrompa as consultas
-                            if situacao_text == "MERCADORIA ENTREGUE":
-                                #st.write(f'Nota {numero_nota}: Mercadoria entregue. Interrupção das consultas.')
-                                break
+                     
 
                 except requests.RequestException as e:
                     print(f"Erro na requisição: {e}")
