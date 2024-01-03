@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 import sqlite3
-
+import folium
 
 
 st.set_page_config(
