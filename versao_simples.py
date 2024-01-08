@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 import sqlite3
-import folium
+
 
 
 st.set_page_config(
@@ -42,13 +42,13 @@ def pagina1():
     dados_login_empresas = {
         'atual': {
             'cnpj': '07117654000149',
-            'senhas': ['FOTUS23','JEO@397'," ","FOTUS@","07117654"],
+            'senhas': ['FOTUS23','JEO@397'," ","FOTUS@","07117654", "MAIORALT"],
         },
     }
 
     # Lista de transportadoras para a seleção
     transportadoras_disponiveis = [ "CT DISTRIBUICAO E LOGISTICA LTDA", "FITLOG TRANSPORTES E LOGISTICA",
-                                    "ATUAL CARGAS TRANSPORTES LTDA", "JEONCEL TRANSPORTES LTDA", "DIREÇÃO TRANSPORTES", "M V G TRANSPORTES LTDA"]
+                                    "ATUAL CARGAS TRANSPORTES LTDA", "JEONCEL TRANSPORTES LTDA", "DIREÇÃO TRANSPORTES", "TG TRANSPORTES GERAIS E DISTRIBUICAO LTDA", "M V G TRANSPORTES LTDA", "BROS LOGISTICA E TRANSPORTES EIRELI","BROS LOGISTICA E TRANSPORTES LTDA","BROS LOGISTICA E TRANSPORTES LTDA"]
 
     with st.expander(f"Marque as transportadoras a serem selecionadas."):
         # Seleção da transportadora
@@ -157,7 +157,10 @@ def pagina1():
                             self.atualizar_banco_dados(numero_nota, situacao_text, data_situacao, previsao_entrega,
                                                     url_completa, Data_Status)
 
-                     
+                            # Se a mercadoria foi entregue, interrompa as consultas
+                            if situacao_text == "MERCADORIA ENTREGUE":
+                                #st.write(f'Nota {numero_nota}: Mercadoria entregue. Interrupção das consultas.')
+                                break
 
                 except requests.RequestException as e:
                     print(f"Erro na requisição: {e}")
@@ -220,7 +223,7 @@ def pagina1():
                 if transportadoras_selecionadas[i]:
                     cursor.execute(
                         f'SELECT Numero_Nota, Status FROM consultas WHERE '
-                        f'(Status NOT IN ("M", "ENTREGA REALIZADA COM RESSALVA") OR Status IS NULL) AND '
+                        f'(Status NOT IN ("MERCADORIA ENTREGUE", "ENTREGA REALIZADA COM RESSALVA") OR Status IS NULL) AND '
                         f'Transportadora = "{transportadora}"'
                     )
                     dados_notas = cursor.fetchall()
@@ -280,16 +283,16 @@ def pagina1():
 # Função para a página 2
 def pagina2():
 
+    import sqlite3
+    import pandas as pd
+    from geopy.geocoders import Nominatim
+    import time
+    import streamlit as st
+
     class ConsultaNotas:
         def __init__(self, db_filename='consultas.db'):
             self.db_filename = db_filename
-
-            # Criar a tabela no banco de dados se não existir
             self._criar_tabela_consultas()
-
-        def _criar_tabela_consultas(self):
-            conn = sqlite3.connect(self.db_filename)
-            cursor = conn.cursor()
 
         def _criar_tabela_consultas(self):
             with sqlite3.connect(self.db_filename) as conn:
@@ -334,77 +337,92 @@ def pagina2():
                     )
                 ''')
 
-            conn.commit()
-            conn.close()
+        def obter_coordenadas_cidade(self, cidade_nome):
+            geolocator = Nominatim(user_agent="consulta_notas")
+            location = geolocator.geocode(cidade_nome)
 
-        def salvar_resultados_consulta(self, df):
+            if location:
+                return location.latitude, location.longitude
+            else:
+                return None
+
+        def salvar_resultado_consulta(self, row):
             conn = sqlite3.connect(self.db_filename)
             cursor = conn.cursor()
 
-            for _, row in df.iterrows():
-                # Verificar se o número da nota já existe no banco de dados
-                cursor.execute('SELECT * FROM consultas WHERE Numero_Nota=?', (row['Numero_Nota'],))
-                existing_row = cursor.fetchone()
+            cursor.execute('SELECT * FROM consultas WHERE Numero_Nota=?', (row['Numero_Nota'],))
+            existing_row = cursor.fetchone()
 
-                if not existing_row:
-                    # Inserir o novo registro apenas se o número da nota não existir
-                    cursor.execute('''
-                        INSERT INTO consultas (
-                            Nro_Fotus, Data_Saida, MES, UF, Regiao, Numero_Nota, Valor_Total,
-                            Valor_Frete, Peso, Perc_Frete, Transportadora, Dt_Faturamento,
-                            PLATAFORMA, Previsao_Entrega, Data_Entrega, Data_Status, STATUS,
-                            Situacao_Entrega, Leadtime, Nome_Cidade
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
-                    ''', (
-                        row['Nro_Fotus'], row['Data_Saida'], row['MES'], row['UF'],
-                        row['Regiao'], row['Numero_Nota'], row['Valor_Total'],
-                        row['Valor_Frete'], row['Peso'], row['Perc_Frete'],
-                        row['Transportadora'], row['Dt_Faturamento'],
-                        row['PLATAFORMA'], row['Previsao_Entrega'], row['Data_Entrega'],
-                        row['Data_Status'], row['STATUS'], row['Situacao_Entrega'], row['Leadtime'], row['Nome_Cidade']
-                    ))
-                else:
-                    # Se o número da nota já existir, atualizar os campos necessários
+            if not existing_row:
+                cursor.execute('''
+                    INSERT INTO consultas (
+                        Nro_Fotus, Data_Saida, MES, UF, Regiao, Numero_Nota, Valor_Total,
+                        Valor_Frete, Peso, Perc_Frete, Transportadora, Dt_Faturamento,
+                        PLATAFORMA, Previsao_Entrega, Data_Entrega, Data_Status, STATUS,
+                        Situacao_Entrega, Leadtime, Nome_Cidade
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
+                ''', (
+                    row['Nro_Fotus'], row['Data_Saida'], row['MES'], row['UF'],
+                    row['Regiao'], row['Numero_Nota'], row['Valor_Total'],
+                    row['Valor_Frete'], row['Peso'], row['Perc_Frete'],
+                    row['Transportadora'], row['Dt_Faturamento'],
+                    row['PLATAFORMA'], row['Previsao_Entrega'], row['Data_Entrega'],
+                    row['Data_Status'], row['STATUS'], row['Situacao_Entrega'], row['Leadtime'], row['Nome_Cidade']
+                ))
+
+                # Obter coordenadas da cidade
+                cidade_nome = row['Nome_Cidade']
+                coordenadas = self.obter_coordenadas_cidade(cidade_nome)
+
+                if coordenadas:
+                    latitude, longitude = coordenadas
                     cursor.execute('''
                         UPDATE consultas SET
-                            STATUS=?, Situacao_Entrega=?, Leadtime=?
+                            Latitude=?, Longitude=?
                         WHERE Numero_Nota=?
-                    ''', (
-                        row['STATUS'], row['Situacao_Entrega'], row['Leadtime'], row['Numero_Nota']
-                    ))
+                    ''', (latitude, longitude, row['Numero_Nota']))
 
-            conn.commit()
-            conn.close()
+                conn.commit()
+                conn.close()
+            else:
+                cursor.execute('''
+                    UPDATE consultas SET
+                        STATUS=?, Situacao_Entrega=?, Leadtime=?
+                    WHERE Numero_Nota=?
+                ''', (
+                    row['STATUS'], row['Situacao_Entrega'], row['Leadtime'], row['Numero_Nota']
+                ))
 
-    # Instância da classe de consulta
-    consulta_notas = ConsultaNotas()
+                conn.commit()
+                conn.close()
 
     # Função para carregar os dados e realizar consultas
     @st.cache_data
     def load_and_process_data(uploaded_file):
         df = pd.read_excel(uploaded_file)
 
-        # Ajustando o formato da coluna "Nro_Fotus" conforme sua expressão
+        # Ajustando o formato da coluna "Nro_Fotus"
         df['Nro_Fotus'] = df['Nro_Fotus'].apply(lambda x: f"0{str(int(x))[:-2]}-{str(int(x))[-2:]}" if not pd.isna(x) else "")
 
         # Corrigindo o nome da coluna após renomeação
         df['Numero_Nota'] = df['Numero_Nota'].astype(str).str.split('.').str[0].str.zfill(6)
 
-    
-
         # Formatando as colunas de datas
-        df['Data_Saida'] = pd.to_datetime(df['Data_Saida'], errors='coerce').dt.strftime('%d/%m/%Y')
-        df['Previsao_Entrega'] = pd.to_datetime(df['Previsao_Entrega'], errors='coerce').dt.strftime('%d/%m/%Y')
-        df['Data_Entrega'] = pd.to_datetime(df['Data_Entrega'], errors='coerce').dt.strftime('%d/%m/%Y')
-        df['Data_Status'] = pd.to_datetime(df['Data_Status'], errors='coerce').dt.strftime('%d/%m/%Y')
-        df['Dt_Faturamento'] = pd.to_datetime(df['Dt_Faturamento'], errors='coerce').dt.strftime('%d/%m/%Y')
+        date_columns = ['Data_Saida', 'Previsao_Entrega', 'Data_Entrega', 'Data_Status', 'Dt_Faturamento']
+        df[date_columns] = df[date_columns].apply(pd.to_datetime, errors='coerce').apply(lambda x: x.dt.strftime('%d/%m/%Y'))
 
-        # Salvar resultados no banco de dados
-        consulta_notas.salvar_resultados_consulta(df)
+        # Instância da classe de consulta
+        consulta_notas = ConsultaNotas()
+
+        for _, row in df.iterrows():
+            # Salvar resultado no banco de dados
+            consulta_notas.salvar_resultado_consulta(row)
+
+            # Adicionar um pequeno delay para evitar atingir limites de taxa da API
+            time.sleep(1)
 
         return df
-
 
     # Upload da planilha
     uploaded_file = st.file_uploader("Escolha um arquivo XLSX", type="xlsx")
@@ -414,7 +432,8 @@ def pagina2():
         df = load_and_process_data(uploaded_file)
 
         # Exibir o DataFrame atualizado após o upload
-        st.write(df)
+        st.write("DataFrame Atualizado:")
+        st.table(df)
 
 
 def pagina3():
