@@ -2,7 +2,6 @@ requests
 beautifulsoup4==4.10.0
 pandas
 openpyxl
-folium
 folium0.15.0
 
 geopandas
