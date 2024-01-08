@@ -270,6 +270,16 @@ def pagina1():
             if df_resultados.empty:
                 st.warning("Nenhuma consulta retornou resultados. Verifique os parâmetros e tente novamente.")
 
+    # Adicionar um botão para exibir os dados em um DataFrame
+    if st.button("Exibir Dados em DataFrame"):
+        cursor.execute('SELECT * FROM consultas')
+        dados_dataframe = cursor.fetchall()
+        df_banco_dados = pd.DataFrame(dados_dataframe, columns=colunas)
+    
+        # Exibir o DataFrame na interface
+        st.dataframe(df_banco_dados)
+
+        
         # Fechar a conexão com o banco de dados
         conn.close()
 
