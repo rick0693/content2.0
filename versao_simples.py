@@ -284,7 +284,6 @@ def pagina1():
 def pagina2():
 
 
-
     class ConsultaNotas:
         def __init__(self, db_filename='consultas.db'):
             self.db_filename = db_filename
@@ -296,31 +295,48 @@ def pagina2():
             conn = sqlite3.connect(self.db_filename)
             cursor = conn.cursor()
 
-            # Ajuste conforme suas colunas
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS consultas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Nro_Fotus TEXT,
-                    Data_Saida TEXT,
-                    MES TEXT,
-                    UF TEXT,
-                    Regiao TEXT,
-                    Numero_Nota TEXT,
-                    Valor_Total TEXT,
-                    Valor_Frete TEXT,
-                    Peso TEXT,
-                    Perc_Frete TEXT,
-                    Transportadora TEXT,
-                    Dt_Faturamento TEXT,
-                    PLATAFORMA TEXT,
-                    Previsao_Entrega TEXT,
-                    Data_Entrega TEXT,
-                    Data_Status TEXT,
-                    STATUS TEXT,
-                    Situacao_Entrega TEXT,
-                    Leadtime TEXT
-                )
-            ''')
+        def _criar_tabela_consultas(self):
+            with sqlite3.connect(self.db_filename) as conn:
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS consultas (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Nro_Fotus TEXT,
+                        Data_Saida TEXT,
+                        MES TEXT,
+                        UF TEXT,
+                        Regiao TEXT,
+                        Numero_Nota TEXT,
+                        Valor_Total TEXT,
+                        Valor_Frete TEXT,
+                        Peso TEXT,
+                        Perc_Frete TEXT,
+                        Transportadora TEXT,
+                        Dt_Faturamento TEXT,
+                        PLATAFORMA TEXT,
+                        Previsao_Entrega TEXT,
+                        Data_Entrega TEXT,
+                        Data_Status TEXT,
+                        STATUS TEXT,
+                        Situacao_Entrega TEXT,
+                        Leadtime TEXT,
+                        Integrador TEXT,
+                        CEP TEXT,
+                        Latitude TEXT,
+                        Longitude TEXT,
+                        Vendedor TEXT,
+                        Nome_cliente TEXT,
+                        Coordenador TEXT,
+                        Cidade_Carga_Atual TEXT,
+                        Classificacao TEXT,
+                        km TEXT,
+                        Nome_Cidade TEXT,
+                        Vazio3 TEXT,
+                        Vazio4 TEXT,
+                        Vazio5 TEXT
+                    )
+                ''')
 
             conn.commit()
             conn.close()
@@ -331,7 +347,7 @@ def pagina2():
 
             for _, row in df.iterrows():
                 # Verificar se o número da nota já existe no banco de dados
-                cursor.execute('SELECT Numero_Nota FROM consultas WHERE Numero_Nota=?', (row['Numero_Nota'],))
+                cursor.execute('SELECT * FROM consultas WHERE Numero_Nota=?', (row['Numero_Nota'],))
                 existing_row = cursor.fetchone()
 
                 if not existing_row:
@@ -341,21 +357,26 @@ def pagina2():
                             Nro_Fotus, Data_Saida, MES, UF, Regiao, Numero_Nota, Valor_Total,
                             Valor_Frete, Peso, Perc_Frete, Transportadora, Dt_Faturamento,
                             PLATAFORMA, Previsao_Entrega, Data_Entrega, Data_Status, STATUS,
-                            Situacao_Entrega, Leadtime
+                            Situacao_Entrega, Leadtime, Nome_Cidade
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
                     ''', (
                         row['Nro_Fotus'], row['Data_Saida'], row['MES'], row['UF'],
                         row['Regiao'], row['Numero_Nota'], row['Valor_Total'],
                         row['Valor_Frete'], row['Peso'], row['Perc_Frete'],
                         row['Transportadora'], row['Dt_Faturamento'],
                         row['PLATAFORMA'], row['Previsao_Entrega'], row['Data_Entrega'],
-                        row['Data_Status'], row['STATUS'], row['Situacao_Entrega'], row['Leadtime']
+                        row['Data_Status'], row['STATUS'], row['Situacao_Entrega'], row['Leadtime'], row['Nome_Cidade']
                     ))
                 else:
-                    # Se o número da nota já existir, você pode optar por atualizar o registro existente
-                    # ou ignorar o novo registro
-                    pass
+                    # Se o número da nota já existir, atualizar os campos necessários
+                    cursor.execute('''
+                        UPDATE consultas SET
+                            STATUS=?, Situacao_Entrega=?, Leadtime=?
+                        WHERE Numero_Nota=?
+                    ''', (
+                        row['STATUS'], row['Situacao_Entrega'], row['Leadtime'], row['Numero_Nota']
+                    ))
 
             conn.commit()
             conn.close()
@@ -368,27 +389,13 @@ def pagina2():
     def load_and_process_data(uploaded_file):
         df = pd.read_excel(uploaded_file)
 
-        # Renomeando as colunas para corresponder à estrutura desejada
-        df.rename(columns={
-            'Numero_Nota': 'Numero_Nota',
-            'Nro_Fotus': 'Nro_Fotus',
-            'Previsao_Entrega': 'Previsao_Entrega',
-            'Data_Entrega': 'Data_Entrega',
-            'Data_Status': 'Data_Status',
-            # Adicione mais renomeações conforme necessário
-        }, inplace=True)
-
         # Ajustando o formato da coluna "Nro_Fotus" conforme sua expressão
         df['Nro_Fotus'] = df['Nro_Fotus'].apply(lambda x: f"0{str(int(x))[:-2]}-{str(int(x))[-2:]}" if not pd.isna(x) else "")
 
-
-        # Removendo os pontos da coluna "Numero_Nota"
         # Corrigindo o nome da coluna após renomeação
         df['Numero_Nota'] = df['Numero_Nota'].astype(str).str.split('.').str[0].str.zfill(6)
 
-
-        # Atualizando as colunas 'MES ', 'Regiao' e adicionando a coluna '%Frete'
-        df = atualizar_colunas(df)
+    
 
         # Formatando as colunas de datas
         df['Data_Saida'] = pd.to_datetime(df['Data_Saida'], errors='coerce').dt.strftime('%d/%m/%Y')
@@ -402,50 +409,6 @@ def pagina2():
 
         return df
 
-    def atualizar_colunas(df):
-        # Atualizando a coluna 'MES ' com base na coluna 'Data_Saida'
-        df['MES '] = df['Data_Saida'].apply(obter_nome_mes)
-
-        # Atualizando a coluna 'Regiao' com base na coluna 'UF'
-        df['Regiao'] = df['UF'].apply(obter_regiao)
-
-        # Adicionando a coluna '%Frete'
-        df['Perc.Frete'] = df.apply(lambda row: calcular_percentual_frete(row['Valor_Frete'], row['Valor_Total']), axis=1)
-
-        df['Data_Status'] = datetime.now().strftime('%d/%m/%Y')
-
-        return df
-
-    def obter_nome_mes(data):
-        # Função para obter o nome do MES a partir da data no formato DD/MM/YYYY
-        try:
-            data_formatada = pd.to_datetime(data, errors='raise')
-            nome_mes = data_formatada.strftime('%B').title()  # %B retorna o nome do MES por extenso
-            # Mapear os nomes dos meses em inglês para português
-            meses_ingles_portugues = {
-                'January': 'Janeiro',
-                'February': 'Fevereiro',
-                # Adicione mais meses conforme necessário
-            }
-            return meses_ingles_portugues.get(nome_mes, '')
-        except:
-            return ''
-
-    def calcular_percentual_frete(valor_frete, valor_total):
-        # Função para calcular o percentual de frete
-        if pd.notna(valor_frete) and pd.notna(valor_total) and valor_total != 0:
-            percentual_frete = (valor_frete / valor_total) * 100
-            return f"{percentual_frete:.2f}%"
-        return ''
-
-    def obter_regiao(uf):
-        # Mapeando a Regiao com base na UF
-        regioes = {
-            'AC': 'NORTE',
-            # Adicione mais mapeamentos conforme necessário
-        }
-
-        return regioes.get(uf, 'Regiao não encontrada')
 
     # Upload da planilha
     uploaded_file = st.file_uploader("Escolha um arquivo XLSX", type="xlsx")
@@ -456,6 +419,9 @@ def pagina2():
 
         # Exibir o DataFrame atualizado após o upload
         st.write(df)
+
+
+
 def pagina3():
 
 
